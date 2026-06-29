@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 # ---------------------------------------------------------------------------
 # Filesystem paths
@@ -35,7 +36,7 @@ ENV_GITHUB_TOKEN: str = "GITHUB_TOKEN"
 
 DEFAULT_PROVIDER: str = "openai"
 DEFAULT_MODEL: str = "gpt-4.1"
-DEFAULT_REVIEW_DEPTH: str = "standard"
+DEFAULT_REVIEW_DEPTH: Literal["minimal", "standard", "thorough"] = "standard"
 DEFAULT_MAX_FILES: int = 50
 DEFAULT_TIMEOUT_SECONDS: int = 120
 
