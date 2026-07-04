@@ -22,8 +22,6 @@ NoPush is designed to make AI code review fast, private, and easy to use from th
 ## Quick Start
 
 ```bash
-pip install nopush
-
 nopush init      # Configure API key and model
 nopush review    # Review staged Git changes
 ```
