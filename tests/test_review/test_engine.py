@@ -22,10 +22,9 @@ from nopush.git.models import (
     Hunk,
     HunkLine,
 )
-from nopush.providers.base import LLMProvider, Message
+from nopush.providers.base import LLMProvider
 from nopush.review.engine import ReviewEngine
 from nopush.review.models import ReviewComment, ReviewResult, Severity
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
@@ -107,16 +106,18 @@ def _valid_review_json(
     line_number: int = 11,
 ) -> str:
     """Generate a valid JSON review response."""
-    return json.dumps([
-        {
-            "severity": severity,
-            "file_path": file_path,
-            "line_number": line_number,
-            "title": "Test issue",
-            "explanation": "This is a test explanation.",
-            "suggestion": "    fixed_code()",
-        }
-    ])
+    return json.dumps(
+        [
+            {
+                "severity": severity,
+                "file_path": file_path,
+                "line_number": line_number,
+                "title": "Test issue",
+                "explanation": "This is a test explanation.",
+                "suggestion": "    fixed_code()",
+            }
+        ]
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -129,16 +130,18 @@ class TestResponseParsing:
 
     def test_valid_json_array(self) -> None:
         """A well-formed JSON array should be parsed correctly."""
-        raw = json.dumps([
-            {
-                "severity": "warning",
-                "file_path": "app/utils.py",
-                "line_number": 11,
-                "title": "Missing type check",
-                "explanation": "data might not be a string.",
-                "suggestion": "str(data).strip()",
-            }
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "severity": "warning",
+                    "file_path": "app/utils.py",
+                    "line_number": 11,
+                    "title": "Missing type check",
+                    "explanation": "data might not be a string.",
+                    "suggestion": "str(data).strip()",
+                }
+            ]
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
         assert comments[0].severity == Severity.WARNING
@@ -146,16 +149,20 @@ class TestResponseParsing:
 
     def test_json_wrapped_in_markdown_fences(self) -> None:
         """JSON wrapped in ```json ... ``` should still parse."""
-        raw = '```json\n[{"severity": "critical", "file_path": "x.py", ' \
-              '"line_number": 1, "title": "Bug", "explanation": "bad"}]\n```'
+        raw = (
+            '```json\n[{"severity": "critical", "file_path": "x.py", '
+            '"line_number": 1, "title": "Bug", "explanation": "bad"}]\n```'
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
         assert comments[0].severity == Severity.CRITICAL
 
     def test_plain_markdown_fences(self) -> None:
         """JSON wrapped in ``` ... ``` (without json) should still parse."""
-        raw = '```\n[{"severity": "suggestion", "file_path": "a.py", ' \
-              '"line_number": 5, "title": "Style", "explanation": "improve"}]\n```'
+        raw = (
+            '```\n[{"severity": "suggestion", "file_path": "a.py", '
+            '"line_number": 5, "title": "Style", "explanation": "improve"}]\n```'
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
         assert comments[0].severity == Severity.SUGGESTION
@@ -172,65 +179,99 @@ class TestResponseParsing:
 
     def test_single_object_normalized_to_list(self) -> None:
         """A single JSON object (not in an array) should be handled."""
-        raw = json.dumps({
-            "severity": "suggestion",
-            "file_path": "main.py",
-            "line_number": 5,
-            "title": "Improve naming",
-            "explanation": "Use a more descriptive name.",
-        })
+        raw = json.dumps(
+            {
+                "severity": "suggestion",
+                "file_path": "main.py",
+                "line_number": 5,
+                "title": "Improve naming",
+                "explanation": "Use a more descriptive name.",
+            }
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
 
     def test_trailing_comma_handled(self) -> None:
         """Trailing commas in JSON should be cleaned up."""
-        raw = '[{"severity": "nitpick", "file_path": "a.py", "line_number": 1, ' \
-              '"title": "Style", "explanation": "minor",},]'
+        raw = (
+            '[{"severity": "nitpick", "file_path": "a.py", "line_number": 1, '
+            '"title": "Style", "explanation": "minor",},]'
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
 
     def test_malformed_entry_skipped(self) -> None:
         """A partially malformed entry should be skipped, not fail."""
-        raw = json.dumps([
-            {"severity": "warning", "file_path": "a.py", "line_number": 1,
-             "title": "Good", "explanation": "ok"},
-            {"bad": "entry"},  # Missing required fields
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "severity": "warning",
+                    "file_path": "a.py",
+                    "line_number": 1,
+                    "title": "Good",
+                    "explanation": "ok",
+                },
+                {"bad": "entry"},  # Missing required fields
+            ]
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
 
     def test_null_suggestion_accepted(self) -> None:
         """A comment with suggestion=null should parse correctly."""
-        raw = json.dumps([{
-            "severity": "warning",
-            "file_path": "a.py",
-            "line_number": 1,
-            "title": "Issue",
-            "explanation": "Problem.",
-            "suggestion": None,
-        }])
+        raw = json.dumps(
+            [
+                {
+                    "severity": "warning",
+                    "file_path": "a.py",
+                    "line_number": 1,
+                    "title": "Issue",
+                    "explanation": "Problem.",
+                    "suggestion": None,
+                }
+            ]
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
         assert comments[0].suggestion is None
 
     def test_embedded_json_in_text(self) -> None:
         """JSON array embedded within surrounding text should be extracted."""
-        raw = 'Here are my findings:\n[{"severity": "critical", ' \
-              '"file_path": "x.py", "line_number": 1, "title": "Bug", ' \
-              '"explanation": "bad"}]\nHope this helps!'
+        raw = (
+            'Here are my findings:\n[{"severity": "critical", '
+            '"file_path": "x.py", "line_number": 1, "title": "Bug", '
+            '"explanation": "bad"}]\nHope this helps!'
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 1
 
     def test_multiple_comments_parsed(self) -> None:
         """Multiple valid comments should all be parsed."""
-        raw = json.dumps([
-            {"severity": "critical", "file_path": "a.py", "line_number": 1,
-             "title": "Bug 1", "explanation": "first"},
-            {"severity": "warning", "file_path": "b.py", "line_number": 2,
-             "title": "Bug 2", "explanation": "second"},
-            {"severity": "suggestion", "file_path": "c.py", "line_number": 3,
-             "title": "Improve", "explanation": "third"},
-        ])
+        raw = json.dumps(
+            [
+                {
+                    "severity": "critical",
+                    "file_path": "a.py",
+                    "line_number": 1,
+                    "title": "Bug 1",
+                    "explanation": "first",
+                },
+                {
+                    "severity": "warning",
+                    "file_path": "b.py",
+                    "line_number": 2,
+                    "title": "Bug 2",
+                    "explanation": "second",
+                },
+                {
+                    "severity": "suggestion",
+                    "file_path": "c.py",
+                    "line_number": 3,
+                    "title": "Improve",
+                    "explanation": "third",
+                },
+            ]
+        )
         comments = ReviewEngine._parse_response(raw)
         assert len(comments) == 3
         assert comments[0].severity == Severity.CRITICAL
@@ -321,12 +362,24 @@ class TestReviewOrchestration:
     def test_successful_review_multiple_files(self) -> None:
         """A review with multiple files should include all valid comments."""
         config = _make_config()
-        response = json.dumps([
-            {"severity": "warning", "file_path": "a.py", "line_number": 11,
-             "title": "Issue 1", "explanation": "Problem in a.py"},
-            {"severity": "suggestion", "file_path": "b.py", "line_number": 11,
-             "title": "Issue 2", "explanation": "Problem in b.py"},
-        ])
+        response = json.dumps(
+            [
+                {
+                    "severity": "warning",
+                    "file_path": "a.py",
+                    "line_number": 11,
+                    "title": "Issue 1",
+                    "explanation": "Problem in a.py",
+                },
+                {
+                    "severity": "suggestion",
+                    "file_path": "b.py",
+                    "line_number": 11,
+                    "title": "Issue 2",
+                    "explanation": "Problem in b.py",
+                },
+            ]
+        )
         provider = _make_mock_provider(response)
         engine = ReviewEngine(provider=provider, config=config)
 
@@ -339,12 +392,24 @@ class TestReviewOrchestration:
     def test_hallucinated_file_path_discarded(self) -> None:
         """Comments referencing non-existent file paths should be discarded."""
         config = _make_config()
-        response = json.dumps([
-            {"severity": "warning", "file_path": "app/utils.py", "line_number": 11,
-             "title": "Real issue", "explanation": "Valid."},
-            {"severity": "critical", "file_path": "nonexistent.py", "line_number": 1,
-             "title": "Fake issue", "explanation": "Hallucinated."},
-        ])
+        response = json.dumps(
+            [
+                {
+                    "severity": "warning",
+                    "file_path": "app/utils.py",
+                    "line_number": 11,
+                    "title": "Real issue",
+                    "explanation": "Valid.",
+                },
+                {
+                    "severity": "critical",
+                    "file_path": "nonexistent.py",
+                    "line_number": 1,
+                    "title": "Fake issue",
+                    "explanation": "Hallucinated.",
+                },
+            ]
+        )
         provider = _make_mock_provider(response)
         engine = ReviewEngine(provider=provider, config=config)
 
@@ -356,10 +421,17 @@ class TestReviewOrchestration:
     def test_all_hallucinated_paths_empty_result(self) -> None:
         """If all comments reference non-existent paths, result should be empty."""
         config = _make_config()
-        response = json.dumps([
-            {"severity": "critical", "file_path": "fake.py", "line_number": 1,
-             "title": "Fake", "explanation": "Not real."},
-        ])
+        response = json.dumps(
+            [
+                {
+                    "severity": "critical",
+                    "file_path": "fake.py",
+                    "line_number": 1,
+                    "title": "Fake",
+                    "explanation": "Not real.",
+                },
+            ]
+        )
         provider = _make_mock_provider(response)
         engine = ReviewEngine(provider=provider, config=config)
 
@@ -439,12 +511,27 @@ class TestReviewResult:
         """count_by_severity should correctly aggregate."""
         result = ReviewResult(
             comments=[
-                ReviewComment(severity=Severity.CRITICAL, file_path="a.py",
-                              line_number=1, title="A", explanation="X"),
-                ReviewComment(severity=Severity.CRITICAL, file_path="b.py",
-                              line_number=2, title="B", explanation="Y"),
-                ReviewComment(severity=Severity.WARNING, file_path="c.py",
-                              line_number=3, title="C", explanation="Z"),
+                ReviewComment(
+                    severity=Severity.CRITICAL,
+                    file_path="a.py",
+                    line_number=1,
+                    title="A",
+                    explanation="X",
+                ),
+                ReviewComment(
+                    severity=Severity.CRITICAL,
+                    file_path="b.py",
+                    line_number=2,
+                    title="B",
+                    explanation="Y",
+                ),
+                ReviewComment(
+                    severity=Severity.WARNING,
+                    file_path="c.py",
+                    line_number=3,
+                    title="C",
+                    explanation="Z",
+                ),
             ],
             files_reviewed=3,
         )

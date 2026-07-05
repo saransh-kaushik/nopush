@@ -69,10 +69,7 @@ class GeminiProvider(LLMProvider):
         (5xx) responses.
         """
         payload = self._build_payload(messages)
-        url = (
-            f"{self._base_url}/models/{self._model}:generateContent"
-            f"?key={self._api_key}"
-        )
+        url = f"{self._base_url}/models/{self._model}:generateContent?key={self._api_key}"
 
         last_error: Exception | None = None
         backoff = _INITIAL_BACKOFF_SECONDS
@@ -104,12 +101,8 @@ class GeminiProvider(LLMProvider):
                     raise ProviderAuthError(msg)
 
                 if response.status_code == 429:
-                    last_error = ProviderRateLimitError(
-                        "Gemini rate limit exceeded. Retrying…"
-                    )
-                    logger.warning(
-                        "Rate limited (429), backing off %.1fs…", backoff
-                    )
+                    last_error = ProviderRateLimitError("Gemini rate limit exceeded. Retrying…")
+                    logger.warning("Rate limited (429), backing off %.1fs…", backoff)
                     time.sleep(backoff)
                     backoff *= 2
                     continue
@@ -129,9 +122,7 @@ class GeminiProvider(LLMProvider):
 
                 # Other HTTP errors — don't retry
                 error_detail = self._extract_error_message(response)
-                msg = (
-                    f"Gemini API returned {response.status_code}: {error_detail}"
-                )
+                msg = f"Gemini API returned {response.status_code}: {error_detail}"
                 raise ProviderError(msg)
 
             except httpx.TimeoutException as exc:
@@ -175,10 +166,12 @@ class GeminiProvider(LLMProvider):
             else:
                 # Gemini uses "model" instead of "assistant"
                 role = "model" if msg.role == "assistant" else "user"
-                contents.append({
-                    "role": role,
-                    "parts": [{"text": msg.content}],
-                })
+                contents.append(
+                    {
+                        "role": role,
+                        "parts": [{"text": msg.content}],
+                    }
+                )
 
         payload: dict[str, Any] = {
             "contents": contents,
@@ -222,6 +215,6 @@ class GeminiProvider(LLMProvider):
         try:
             body = response.json()
             error = body.get("error", {})
-            return error.get("message", response.text[:500])
+            return str(error.get("message", response.text[:500]))
         except Exception:
             return response.text[:500]

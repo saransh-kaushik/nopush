@@ -30,7 +30,6 @@ from nopush.git.diff_parser import (
 )
 from nopush.git.models import ChangeType, FileStatus
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Test data — realistic unified diffs
 # ═══════════════════════════════════════════════════════════════════════════
@@ -164,9 +163,7 @@ class TestParseDiffBasic:
         assert len(fd.hunks) == 1
 
         # Check the added line
-        added_lines = [
-            line for line in fd.hunks[0].lines if line.change_type == ChangeType.ADDED
-        ]
+        added_lines = [line for line in fd.hunks[0].lines if line.change_type == ChangeType.ADDED]
         assert len(added_lines) == 1
         assert added_lines[0].content == "import sys"
 
@@ -181,9 +178,7 @@ class TestParseDiffBasic:
         assert fd.language == "python"
         assert len(fd.hunks) == 1
         assert len(fd.hunks[0].lines) == 3
-        assert all(
-            line.change_type == ChangeType.ADDED for line in fd.hunks[0].lines
-        )
+        assert all(line.change_type == ChangeType.ADDED for line in fd.hunks[0].lines)
 
     def test_deleted_file(self) -> None:
         """A deleted file should have status DELETED and new_path /dev/null."""
@@ -194,9 +189,7 @@ class TestParseDiffBasic:
         assert fd.new_path == "/dev/null"
         assert fd.old_path == "old_file.py"
         assert len(fd.hunks) == 1
-        assert all(
-            line.change_type == ChangeType.REMOVED for line in fd.hunks[0].lines
-        )
+        assert all(line.change_type == ChangeType.REMOVED for line in fd.hunks[0].lines)
 
     def test_renamed_file_with_changes(self) -> None:
         """A renamed file should have status RENAMED and correct old/new paths."""
@@ -481,36 +474,42 @@ class TestGitCommands:
 
     def test_git_not_installed_raises(self) -> None:
         """Missing git should raise RuntimeError."""
-        with patch(
-            "nopush.git.diff_parser.subprocess.run",
-            side_effect=FileNotFoundError,
+        with (
+            patch(
+                "nopush.git.diff_parser.subprocess.run",
+                side_effect=FileNotFoundError,
+            ),
+            pytest.raises(RuntimeError, match="not installed"),
         ):
-            with pytest.raises(RuntimeError, match="not installed"):
-                get_staged_diff()
+            get_staged_diff()
 
     def test_git_command_failure_raises(self) -> None:
         """A failing git command should raise RuntimeError."""
         import subprocess
 
-        with patch(
-            "nopush.git.diff_parser.subprocess.run",
-            side_effect=subprocess.CalledProcessError(
-                128, "git", stderr="fatal: not a git repo"
+        with (
+            patch(
+                "nopush.git.diff_parser.subprocess.run",
+                side_effect=subprocess.CalledProcessError(
+                    128, "git", stderr="fatal: not a git repo"
+                ),
             ),
+            pytest.raises(RuntimeError, match="git command failed"),
         ):
-            with pytest.raises(RuntimeError, match="git command failed"):
-                get_staged_diff()
+            get_staged_diff()
 
     def test_git_timeout_raises(self) -> None:
         """A timed-out git command should raise RuntimeError."""
         import subprocess
 
-        with patch(
-            "nopush.git.diff_parser.subprocess.run",
-            side_effect=subprocess.TimeoutExpired("git", 30),
+        with (
+            patch(
+                "nopush.git.diff_parser.subprocess.run",
+                side_effect=subprocess.TimeoutExpired("git", 30),
+            ),
+            pytest.raises(RuntimeError, match="timed out"),
         ):
-            with pytest.raises(RuntimeError, match="timed out"):
-                get_staged_diff()
+            get_staged_diff()
 
     def test_cwd_is_passed_through(self) -> None:
         """The cwd parameter should be forwarded to subprocess.run."""

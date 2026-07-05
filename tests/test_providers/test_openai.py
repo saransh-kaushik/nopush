@@ -42,7 +42,6 @@ from nopush.providers.gemini import GeminiProvider
 from nopush.providers.openai import OpenAIProvider
 from nopush.providers.registry import get_provider, list_providers
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
@@ -163,9 +162,7 @@ class TestOpenAIComplete:
 
         mock_resp = _mock_httpx_response(
             200,
-            json_data={
-                "choices": [{"message": {"content": "[]"}}]
-            },
+            json_data={"choices": [{"message": {"content": "[]"}}]},
         )
 
         with patch("nopush.providers.openai.httpx.post", return_value=mock_resp):
@@ -179,9 +176,11 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
         mock_resp = _mock_httpx_response(401)
 
-        with patch("nopush.providers.openai.httpx.post", return_value=mock_resp):
-            with pytest.raises(ProviderAuthError, match="authentication failed"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.openai.httpx.post", return_value=mock_resp),
+            pytest.raises(ProviderAuthError, match="authentication failed"),
+        ):
+            provider.complete(_sample_messages())
 
     def test_auth_error_403(self) -> None:
         """A 403 response should raise ProviderAuthError."""
@@ -189,9 +188,11 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
         mock_resp = _mock_httpx_response(403)
 
-        with patch("nopush.providers.openai.httpx.post", return_value=mock_resp):
-            with pytest.raises(ProviderAuthError, match="access denied"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.openai.httpx.post", return_value=mock_resp),
+            pytest.raises(ProviderAuthError, match="access denied"),
+        ):
+            provider.complete(_sample_messages())
 
     @patch("nopush.providers.openai.time.sleep")
     def test_rate_limit_retries(self, mock_sleep: MagicMock) -> None:
@@ -200,9 +201,7 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
 
         rate_limited = _mock_httpx_response(429)
-        success = _mock_httpx_response(
-            200, json_data={"choices": [{"message": {"content": "[]"}}]}
-        )
+        success = _mock_httpx_response(200, json_data={"choices": [{"message": {"content": "[]"}}]})
 
         with patch(
             "nopush.providers.openai.httpx.post",
@@ -220,12 +219,14 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
         rate_limited = _mock_httpx_response(429)
 
-        with patch(
-            "nopush.providers.openai.httpx.post",
-            return_value=rate_limited,
+        with (
+            patch(
+                "nopush.providers.openai.httpx.post",
+                return_value=rate_limited,
+            ),
+            pytest.raises(ProviderRateLimitError),
         ):
-            with pytest.raises(ProviderRateLimitError):
-                provider.complete(_sample_messages())
+            provider.complete(_sample_messages())
 
     @patch("nopush.providers.openai.time.sleep")
     def test_server_error_retries(self, mock_sleep: MagicMock) -> None:
@@ -234,9 +235,7 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
 
         server_error = _mock_httpx_response(500)
-        success = _mock_httpx_response(
-            200, json_data={"choices": [{"message": {"content": "[]"}}]}
-        )
+        success = _mock_httpx_response(200, json_data={"choices": [{"message": {"content": "[]"}}]})
 
         with patch(
             "nopush.providers.openai.httpx.post",
@@ -251,25 +250,29 @@ class TestOpenAIComplete:
         config = _make_config()
         provider = OpenAIProvider(config)
 
-        with patch(
-            "nopush.providers.openai.httpx.post",
-            side_effect=httpx.TimeoutException("timeout"),
+        with (
+            patch(
+                "nopush.providers.openai.httpx.post",
+                side_effect=httpx.TimeoutException("timeout"),
+            ),
+            patch("nopush.providers.openai.time.sleep"),
+            pytest.raises(ProviderNetworkError, match="timed out"),
         ):
-            with patch("nopush.providers.openai.time.sleep"):
-                with pytest.raises(ProviderNetworkError, match="timed out"):
-                    provider.complete(_sample_messages())
+            provider.complete(_sample_messages())
 
     def test_network_error_raises(self) -> None:
         """Network-level errors should raise ProviderNetworkError."""
         config = _make_config()
         provider = OpenAIProvider(config)
 
-        with patch(
-            "nopush.providers.openai.httpx.post",
-            side_effect=httpx.ConnectError("Connection refused"),
+        with (
+            patch(
+                "nopush.providers.openai.httpx.post",
+                side_effect=httpx.ConnectError("Connection refused"),
+            ),
+            pytest.raises(ProviderNetworkError, match="Network error"),
         ):
-            with pytest.raises(ProviderNetworkError, match="Network error"):
-                provider.complete(_sample_messages())
+            provider.complete(_sample_messages())
 
     def test_malformed_response(self) -> None:
         """A response missing expected fields should raise ProviderError."""
@@ -277,9 +280,11 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
         mock_resp = _mock_httpx_response(200, json_data={"unexpected": "format"})
 
-        with patch("nopush.providers.openai.httpx.post", return_value=mock_resp):
-            with pytest.raises(ProviderError, match="Unexpected"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.openai.httpx.post", return_value=mock_resp),
+            pytest.raises(ProviderError, match="Unexpected"),
+        ):
+            provider.complete(_sample_messages())
 
     def test_other_http_error_no_retry(self) -> None:
         """Non-retryable HTTP errors (e.g. 400) should not be retried."""
@@ -287,9 +292,11 @@ class TestOpenAIComplete:
         provider = OpenAIProvider(config)
         mock_resp = _mock_httpx_response(400, text="Bad Request")
 
-        with patch("nopush.providers.openai.httpx.post", return_value=mock_resp) as mock_post:
-            with pytest.raises(ProviderError, match="400"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.openai.httpx.post", return_value=mock_resp) as mock_post,
+            pytest.raises(ProviderError, match="400"),
+        ):
+            provider.complete(_sample_messages())
         # Should be called only once (no retry)
         assert mock_post.call_count == 1
 
@@ -459,9 +466,11 @@ class TestGeminiComplete:
             json_data={"error": {"message": "API key not valid"}},
         )
 
-        with patch("nopush.providers.gemini.httpx.post", return_value=mock_resp):
-            with pytest.raises(ProviderAuthError, match="authentication failed"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.gemini.httpx.post", return_value=mock_resp),
+            pytest.raises(ProviderAuthError, match="authentication failed"),
+        ):
+            provider.complete(_sample_messages())
 
     def test_auth_error_403(self) -> None:
         """A 403 response should raise ProviderAuthError."""
@@ -469,9 +478,11 @@ class TestGeminiComplete:
         provider = GeminiProvider(config)
         mock_resp = _mock_httpx_response(403, json_data={"error": {"message": "Forbidden"}})
 
-        with patch("nopush.providers.gemini.httpx.post", return_value=mock_resp):
-            with pytest.raises(ProviderAuthError, match="authentication failed"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.gemini.httpx.post", return_value=mock_resp),
+            pytest.raises(ProviderAuthError, match="authentication failed"),
+        ):
+            provider.complete(_sample_messages())
 
     @patch("nopush.providers.gemini.time.sleep")
     def test_rate_limit_retries(self, mock_sleep: MagicMock) -> None:
@@ -482,11 +493,7 @@ class TestGeminiComplete:
         rate_limited = _mock_httpx_response(429)
         success = _mock_httpx_response(
             200,
-            json_data={
-                "candidates": [
-                    {"content": {"parts": [{"text": "[]"}], "role": "model"}}
-                ]
-            },
+            json_data={"candidates": [{"content": {"parts": [{"text": "[]"}], "role": "model"}}]},
         )
 
         with patch(
@@ -505,12 +512,14 @@ class TestGeminiComplete:
         provider = GeminiProvider(config)
         rate_limited = _mock_httpx_response(429)
 
-        with patch(
-            "nopush.providers.gemini.httpx.post",
-            return_value=rate_limited,
+        with (
+            patch(
+                "nopush.providers.gemini.httpx.post",
+                return_value=rate_limited,
+            ),
+            pytest.raises(ProviderRateLimitError),
         ):
-            with pytest.raises(ProviderRateLimitError):
-                provider.complete(_sample_messages())
+            provider.complete(_sample_messages())
 
     @patch("nopush.providers.gemini.time.sleep")
     def test_server_error_retries(self, mock_sleep: MagicMock) -> None:
@@ -521,11 +530,7 @@ class TestGeminiComplete:
         server_error = _mock_httpx_response(503)
         success = _mock_httpx_response(
             200,
-            json_data={
-                "candidates": [
-                    {"content": {"parts": [{"text": "ok"}], "role": "model"}}
-                ]
-            },
+            json_data={"candidates": [{"content": {"parts": [{"text": "ok"}], "role": "model"}}]},
         )
 
         with patch(
@@ -541,25 +546,29 @@ class TestGeminiComplete:
         config = _make_config(provider="gemini")
         provider = GeminiProvider(config)
 
-        with patch(
-            "nopush.providers.gemini.httpx.post",
-            side_effect=httpx.TimeoutException("timeout"),
+        with (
+            patch(
+                "nopush.providers.gemini.httpx.post",
+                side_effect=httpx.TimeoutException("timeout"),
+            ),
+            patch("nopush.providers.gemini.time.sleep"),
+            pytest.raises(ProviderNetworkError, match="timed out"),
         ):
-            with patch("nopush.providers.gemini.time.sleep"):
-                with pytest.raises(ProviderNetworkError, match="timed out"):
-                    provider.complete(_sample_messages())
+            provider.complete(_sample_messages())
 
     def test_network_error_raises(self) -> None:
         """Network-level errors should raise ProviderNetworkError."""
         config = _make_config(provider="gemini")
         provider = GeminiProvider(config)
 
-        with patch(
-            "nopush.providers.gemini.httpx.post",
-            side_effect=httpx.ConnectError("Connection refused"),
+        with (
+            patch(
+                "nopush.providers.gemini.httpx.post",
+                side_effect=httpx.ConnectError("Connection refused"),
+            ),
+            pytest.raises(ProviderNetworkError, match="Network error"),
         ):
-            with pytest.raises(ProviderNetworkError, match="Network error"):
-                provider.complete(_sample_messages())
+            provider.complete(_sample_messages())
 
     def test_malformed_response(self) -> None:
         """A response missing expected fields should raise ProviderError."""
@@ -567,9 +576,11 @@ class TestGeminiComplete:
         provider = GeminiProvider(config)
         mock_resp = _mock_httpx_response(200, json_data={"unexpected": "format"})
 
-        with patch("nopush.providers.gemini.httpx.post", return_value=mock_resp):
-            with pytest.raises(ProviderError, match="Unexpected"):
-                provider.complete(_sample_messages())
+        with (
+            patch("nopush.providers.gemini.httpx.post", return_value=mock_resp),
+            pytest.raises(ProviderError, match="Unexpected"),
+        ):
+            provider.complete(_sample_messages())
 
     def test_api_key_in_url(self) -> None:
         """The API key should be passed as a query parameter."""
@@ -578,11 +589,7 @@ class TestGeminiComplete:
 
         mock_resp = _mock_httpx_response(
             200,
-            json_data={
-                "candidates": [
-                    {"content": {"parts": [{"text": "[]"}], "role": "model"}}
-                ]
-            },
+            json_data={"candidates": [{"content": {"parts": [{"text": "[]"}], "role": "model"}}]},
         )
 
         with patch("nopush.providers.gemini.httpx.post", return_value=mock_resp) as mock_post:

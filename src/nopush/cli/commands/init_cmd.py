@@ -80,7 +80,7 @@ def init_callback() -> None:
 
     # --- Step 3: Model ---
     default_model = _PROVIDER_DEFAULT_MODELS.get(provider_input, DEFAULT_MODEL)
-    console.print(f"\n[bold]Step 3 of 3[/bold] — Choose a model")
+    console.print("\n[bold]Step 3 of 3[/bold] — Choose a model")
     console.print(f"  [dim]Default for {provider_input}: {default_model}[/dim]")
 
     model = Prompt.ask("Model", default=default_model)

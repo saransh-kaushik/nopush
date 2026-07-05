@@ -17,7 +17,7 @@ from nopush.prompts.templates import (
 __all__ = [
     "DEPTH_PROMPTS",
     "FILE_DIFF_TEMPLATE",
-    "PromptBuilder",
     "SYSTEM_PROMPT",
     "USER_PROMPT_TEMPLATE",
+    "PromptBuilder",
 ]

@@ -6,7 +6,7 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from nopush.review.models import ReviewComment, ReviewResult, Severity
+from nopush.review.models import ReviewComment, ReviewResult
 
 if TYPE_CHECKING:
     from nopush.config.schema import NoPushConfig
@@ -22,11 +22,11 @@ class ReviewEngine:
     LLM provider, and response parser.
     """
 
-    def __init__(self, provider: "LLMProvider", config: "NoPushConfig") -> None:
+    def __init__(self, provider: LLMProvider, config: NoPushConfig) -> None:
         self._provider = provider
         self._config = config
 
-    def review(self, file_diffs: list["FileDiff"]) -> ReviewResult:
+    def review(self, file_diffs: list[FileDiff]) -> ReviewResult:
         """Run a full review on the given file diffs.
 
         Parameters
@@ -62,9 +62,7 @@ class ReviewEngine:
 
         # Validate that referenced files exist in the diff
         valid_paths = {fd.path for fd in file_diffs}
-        validated_comments = [
-            c for c in all_comments if c.file_path in valid_paths
-        ]
+        validated_comments = [c for c in all_comments if c.file_path in valid_paths]
 
         return ReviewResult(
             comments=validated_comments,

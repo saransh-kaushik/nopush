@@ -12,9 +12,6 @@ This command orchestrates the full review pipeline:
 
 from __future__ import annotations
 
-import sys
-from typing import Optional
-
 import typer
 from rich.console import Console
 
@@ -24,25 +21,25 @@ console = Console()
 
 
 def review_callback(
-    depth: Optional[str] = typer.Option(
+    depth: str | None = typer.Option(
         None,
         "--depth",
         "-d",
         help=f"Review depth: {', '.join(SUPPORTED_REVIEW_DEPTHS)}.",
     ),
-    provider: Optional[str] = typer.Option(
+    provider: str | None = typer.Option(
         None,
         "--provider",
         "-p",
         help="Override the configured LLM provider.",
     ),
-    model: Optional[str] = typer.Option(
+    model: str | None = typer.Option(
         None,
         "--model",
         "-m",
         help="Override the configured model.",
     ),
-    max_files: Optional[int] = typer.Option(
+    max_files: int | None = typer.Option(
         None,
         "--max-files",
         help="Maximum number of files to review.",
@@ -94,9 +91,7 @@ def review_callback(
         raise typer.Exit(code=1)
 
     # ── Step 3: Get staged diffs ──
-    with console.status(
-        "[bold cyan]Reading staged changes…[/bold cyan]", spinner="dots"
-    ):
+    with console.status("[bold cyan]Reading staged changes…[/bold cyan]", spinner="dots"):
         try:
             raw_diff = get_staged_diff()
         except RuntimeError as exc:
@@ -164,9 +159,7 @@ def review_callback(
             result = engine.review(file_diffs)
         except ProviderAuthError as exc:
             console.print(f"\n[red]Authentication failed:[/red] {exc}")
-            console.print(
-                "[dim]Check your API key with [bold]nopush init[/bold].[/dim]"
-            )
+            console.print("[dim]Check your API key with [bold]nopush init[/bold].[/dim]")
             raise typer.Exit(code=1) from exc
         except ProviderError as exc:
             console.print(f"\n[red]Provider error:[/red] {exc}")

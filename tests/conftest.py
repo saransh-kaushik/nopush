@@ -14,7 +14,6 @@ from nopush.git.models import (
 )
 from nopush.review.models import ReviewComment, ReviewResult, Severity
 
-
 # ---------------------------------------------------------------------------
 # Config fixtures
 # ---------------------------------------------------------------------------

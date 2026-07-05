@@ -17,7 +17,7 @@ class AnthropicProvider(LLMProvider):
         This is a stub. Full implementation is planned for a future phase.
     """
 
-    def __init__(self, config: "NoPushConfig") -> None:
+    def __init__(self, config: NoPushConfig) -> None:
         self._config = config
 
     def complete(self, messages: list[Message]) -> str:

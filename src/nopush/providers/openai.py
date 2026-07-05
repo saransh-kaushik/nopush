@@ -107,12 +107,8 @@ class OpenAIProvider(LLMProvider):
                     raise ProviderAuthError(msg)
 
                 if response.status_code == 429:
-                    last_error = ProviderRateLimitError(
-                        "Rate limit exceeded. Retrying…"
-                    )
-                    logger.warning(
-                        "Rate limited (429), backing off %.1fs…", backoff
-                    )
+                    last_error = ProviderRateLimitError("Rate limit exceeded. Retrying…")
+                    logger.warning("Rate limited (429), backing off %.1fs…", backoff)
                     time.sleep(backoff)
                     backoff *= 2
                     continue
@@ -131,10 +127,7 @@ class OpenAIProvider(LLMProvider):
                     continue
 
                 # Other HTTP errors — don't retry
-                msg = (
-                    f"OpenAI API returned {response.status_code}: "
-                    f"{response.text[:500]}"
-                )
+                msg = f"OpenAI API returned {response.status_code}: {response.text[:500]}"
                 raise ProviderError(msg)
 
             except httpx.TimeoutException as exc:

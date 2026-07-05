@@ -95,9 +95,7 @@ class PromptBuilder:
 
     def _build_system_message(self) -> Message:
         """Construct the system message with depth modifier."""
-        depth_instruction = DEPTH_PROMPTS.get(
-            self.review_depth, DEPTH_PROMPTS["standard"]
-        )
+        depth_instruction = DEPTH_PROMPTS.get(self.review_depth, DEPTH_PROMPTS["standard"])
         content = f"{SYSTEM_PROMPT}\n\n## Review Depth\n\n{depth_instruction}"
         return Message(role="system", content=content)
 
@@ -147,7 +145,7 @@ class PromptBuilder:
         current_diffs: list[FileDiff] = []
         current_tokens = 0
 
-        for block, fd in zip(diff_blocks, file_diffs):
+        for block, fd in zip(diff_blocks, file_diffs, strict=True):
             block_tokens = self._estimate_tokens(block)
 
             if current_tokens + block_tokens > budget and current_blocks:
@@ -170,9 +168,7 @@ class PromptBuilder:
         return chunks
 
     @staticmethod
-    def _assemble_user_message(
-        blocks: list[str], file_diffs: list[FileDiff]
-    ) -> Message:
+    def _assemble_user_message(blocks: list[str], file_diffs: list[FileDiff]) -> Message:
         """Create the user message from accumulated diff blocks."""
         total_additions = sum(fd.total_additions for fd in file_diffs)
         total_deletions = sum(fd.total_deletions for fd in file_diffs)

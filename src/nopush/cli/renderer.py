@@ -14,16 +14,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from rich.columns import Columns
-from rich.console import Console
-from rich.padding import Padding
+from rich.console import Console, Group, RenderableType
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.table import Table
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from nopush.review.models import ReviewComment, ReviewResult, Severity
+    from nopush.review.models import ReviewComment, ReviewResult
 
 # ---------------------------------------------------------------------------
 # Severity styling
@@ -85,7 +82,7 @@ class ReviewRenderer:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
 
-    def render(self, result: "ReviewResult") -> None:
+    def render(self, result: ReviewResult) -> None:
         """Render a full review result to the console.
 
         Displays a summary header, followed by individual comment panels.
@@ -115,7 +112,7 @@ class ReviewRenderer:
     # Summary
     # ------------------------------------------------------------------
 
-    def _render_summary(self, result: "ReviewResult") -> Panel:
+    def _render_summary(self, result: ReviewResult) -> Panel:
         """Render a summary panel with issue counts by severity."""
         from nopush.review.models import Severity
 
@@ -158,9 +155,7 @@ class ReviewRenderer:
     # Individual comments
     # ------------------------------------------------------------------
 
-    def _render_comment(
-        self, comment: "ReviewComment", index: int = 1
-    ) -> Panel:
+    def _render_comment(self, comment: ReviewComment, index: int = 1) -> Panel:
         """Render a single review comment as a styled panel."""
         severity_val = comment.severity.value
         style, emoji = _SEVERITY_STYLES.get(severity_val, ("", ""))
@@ -195,7 +190,7 @@ class ReviewRenderer:
             content.append("💡 Suggested fix:", style="bold green")
             content.append("\n")
 
-        panel_content: list[object] = [content]
+        panel_content: list[RenderableType] = [content]
 
         if comment.suggestion:
             # Infer language from file path for syntax highlighting
@@ -210,8 +205,6 @@ class ReviewRenderer:
             panel_content.append(syntax)
 
         # Build the panel with a group of renderables
-        from rich.console import Group
-
         group = Group(*panel_content)
 
         return Panel(
@@ -225,15 +218,14 @@ class ReviewRenderer:
     # Clean code / no issues
     # ------------------------------------------------------------------
 
-    def _render_clean(self, result: "ReviewResult") -> None:
+    def _render_clean(self, result: ReviewResult) -> None:
         """Render a congratulatory message when no issues are found."""
         content = Text()
         content.append("✨ ", style="bold green")
         content.append("No issues found!", style="bold green")
         content.append("\n\n")
         content.append(
-            "Your code looks great. No critical bugs, warnings, or "
-            "suggestions were identified.",
+            "Your code looks great. No critical bugs, warnings, or suggestions were identified.",
             style="",
         )
         content.append("\n\n")
@@ -258,7 +250,7 @@ class ReviewRenderer:
     # Footer
     # ------------------------------------------------------------------
 
-    def _render_footer(self, result: "ReviewResult") -> None:
+    def _render_footer(self, result: ReviewResult) -> None:
         """Render a minimal footer after all comments."""
         from nopush.review.models import Severity
 

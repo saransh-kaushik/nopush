@@ -85,6 +85,11 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["nopush"]
 
+[tool.ruff.lint.per-file-ignores]
+# Sample diff fixtures intentionally include unified-diff context lines
+# containing a single space, which look like trailing whitespace to ruff.
+"tests/test_git/test_diff_parser.py" = ["W293"]
+
 # ---------------------------------------------------------------------------
 # Mypy – static type checking
 # ---------------------------------------------------------------------------

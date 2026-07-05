@@ -8,13 +8,27 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import re
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
 from nopush.cli.app import app
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI escape codes so assertions are stable across environments.
+
+    Rich/Typer force-enable colored help output when common CI environment
+    variables (e.g. ``GITHUB_ACTIONS``) are detected, even for a non-tty
+    ``CliRunner`` invocation, which would otherwise split option names like
+    ``--depth`` across escape codes.
+    """
+    return _ANSI_RE.sub("", text)
 
 
 class TestCLIApp:
@@ -63,12 +77,15 @@ class TestReviewCommand:
         """Review with no staged changes should exit gracefully."""
         from nopush.config.schema import NoPushConfig
 
-        with patch(
-            "nopush.config.manager.ConfigManager.load",
-            return_value=NoPushConfig(api_key="sk-test"),
-        ), patch(
-            "nopush.git.diff_parser.get_staged_diff",
-            return_value="",
+        with (
+            patch(
+                "nopush.config.manager.ConfigManager.load",
+                return_value=NoPushConfig(api_key="sk-test"),
+            ),
+            patch(
+                "nopush.git.diff_parser.get_staged_diff",
+                return_value="",
+            ),
         ):
             result = runner.invoke(app, ["review"])
             assert result.exit_code == 0
@@ -78,12 +95,15 @@ class TestReviewCommand:
         """Review with git error should exit with error code."""
         from nopush.config.schema import NoPushConfig
 
-        with patch(
-            "nopush.config.manager.ConfigManager.load",
-            return_value=NoPushConfig(api_key="sk-test"),
-        ), patch(
-            "nopush.git.diff_parser.get_staged_diff",
-            side_effect=RuntimeError("not a git repository"),
+        with (
+            patch(
+                "nopush.config.manager.ConfigManager.load",
+                return_value=NoPushConfig(api_key="sk-test"),
+            ),
+            patch(
+                "nopush.git.diff_parser.get_staged_diff",
+                side_effect=RuntimeError("not a git repository"),
+            ),
         ):
             result = runner.invoke(app, ["review"])
             assert result.exit_code == 1
@@ -104,7 +124,8 @@ class TestReviewCommand:
     def test_review_help(self) -> None:
         """``nopush review --help`` should show review-specific options."""
         result = runner.invoke(app, ["review", "--help"])
+        output = _strip_ansi(result.output)
         assert result.exit_code == 0
-        assert "--depth" in result.output
-        assert "--provider" in result.output
-        assert "--model" in result.output
+        assert "--depth" in output
+        assert "--provider" in output
+        assert "--model" in output

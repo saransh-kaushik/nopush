@@ -22,7 +22,6 @@ from nopush.git.models import (
 )
 from nopush.prompts.builder import PromptBuilder
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Fixtures / helpers
 # ═══════════════════════════════════════════════════════════════════════════

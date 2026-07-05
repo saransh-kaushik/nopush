@@ -19,7 +19,6 @@ from rich.console import Console
 from nopush.cli.renderer import ReviewRenderer
 from nopush.review.models import ReviewComment, ReviewResult, Severity
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
@@ -98,9 +97,7 @@ class TestRenderClean:
     def test_clean_review_shows_provider_info(self) -> None:
         """The clean review should show provider and model info."""
         renderer, buffer = _make_renderer()
-        result = _make_result(
-            comments=[], provider="gemini", model="gemini-2.5-pro"
-        )
+        result = _make_result(comments=[], provider="gemini", model="gemini-2.5-pro")
 
         renderer.render(result)
         output = buffer.getvalue()
@@ -153,9 +150,7 @@ class TestRenderWithIssues:
     def test_summary_shows_files_reviewed(self) -> None:
         """The summary should show how many files were reviewed."""
         renderer, buffer = _make_renderer()
-        result = _make_result(
-            comments=[_make_comment()], files_reviewed=7
-        )
+        result = _make_result(comments=[_make_comment()], files_reviewed=7)
 
         renderer.render(result)
         output = buffer.getvalue()
@@ -196,9 +191,7 @@ class TestRenderWithIssues:
     def test_explanation_rendered(self) -> None:
         """The explanation text should appear in the output."""
         renderer, buffer = _make_renderer()
-        comment = _make_comment(
-            explanation="The variable `data` could be None, causing a crash."
-        )
+        comment = _make_comment(explanation="The variable `data` could be None, causing a crash.")
         result = _make_result(comments=[comment])
 
         renderer.render(result)
@@ -299,9 +292,7 @@ class TestSeverityStyling:
     def test_critical_emoji(self) -> None:
         """Critical issues should have the red circle emoji."""
         renderer, buffer = _make_renderer()
-        result = _make_result(
-            comments=[_make_comment(severity=Severity.CRITICAL)]
-        )
+        result = _make_result(comments=[_make_comment(severity=Severity.CRITICAL)])
         renderer.render(result)
         output = buffer.getvalue()
         assert "🔴" in output
@@ -309,9 +300,7 @@ class TestSeverityStyling:
     def test_warning_emoji(self) -> None:
         """Warning issues should have the yellow circle emoji."""
         renderer, buffer = _make_renderer()
-        result = _make_result(
-            comments=[_make_comment(severity=Severity.WARNING)]
-        )
+        result = _make_result(comments=[_make_comment(severity=Severity.WARNING)])
         renderer.render(result)
         output = buffer.getvalue()
         assert "🟡" in output
@@ -319,9 +308,7 @@ class TestSeverityStyling:
     def test_suggestion_emoji(self) -> None:
         """Suggestions should have the blue circle emoji."""
         renderer, buffer = _make_renderer()
-        result = _make_result(
-            comments=[_make_comment(severity=Severity.SUGGESTION)]
-        )
+        result = _make_result(comments=[_make_comment(severity=Severity.SUGGESTION)])
         renderer.render(result)
         output = buffer.getvalue()
         assert "🔵" in output
@@ -329,9 +316,7 @@ class TestSeverityStyling:
     def test_nitpick_emoji(self) -> None:
         """Nitpicks should have the white circle emoji."""
         renderer, buffer = _make_renderer()
-        result = _make_result(
-            comments=[_make_comment(severity=Severity.NITPICK)]
-        )
+        result = _make_result(comments=[_make_comment(severity=Severity.NITPICK)])
         renderer.render(result)
         output = buffer.getvalue()
         assert "⚪" in output

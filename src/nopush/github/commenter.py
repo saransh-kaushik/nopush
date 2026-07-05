@@ -29,7 +29,7 @@ class PRCommenter:
             raise ProviderError(msg)
         self._token = token
 
-    def post_review(self, pr_url: str, result: "ReviewResult") -> None:
+    def post_review(self, pr_url: str, result: ReviewResult) -> None:
         """Post review comments to the specified pull request.
 
         Parameters
@@ -42,6 +42,4 @@ class PRCommenter:
         .. note::
             Full implementation coming in Step 8.
         """
-        raise NotImplementedError(
-            "GitHub PR commenting is not yet implemented (Step 8)."
-        )
+        raise NotImplementedError("GitHub PR commenting is not yet implemented (Step 8).")

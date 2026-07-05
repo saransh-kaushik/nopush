@@ -70,9 +70,7 @@ _EXTENSION_MAP: dict[str, str] = {
 }
 
 # Regex for the ``@@ -old_start,old_count +new_start,new_count @@`` header
-_HUNK_HEADER_RE = re.compile(
-    r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$"
-)
+_HUNK_HEADER_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$")
 
 
 def _detect_language(file_path: str) -> str:
@@ -134,9 +132,7 @@ def get_file_diff(paths: list[str], cwd: str | None = None) -> str:
     cwd:
         Working directory to run git in.
     """
-    return _run_git(
-        "diff", "--staged", "--unified=3", "--no-color", "--", *paths, cwd=cwd
-    )
+    return _run_git("diff", "--staged", "--unified=3", "--no-color", "--", *paths, cwd=cwd)
 
 
 # ---------------------------------------------------------------------------
@@ -269,9 +265,9 @@ def _parse_file_section(section: str) -> FileDiff | None:
             status = FileStatus.DELETED
         elif line.startswith("rename from "):
             status = FileStatus.RENAMED
-            rename_from = line[len("rename from "):]
+            rename_from = line[len("rename from ") :]
         elif line.startswith("rename to "):
-            rename_to = line[len("rename to "):]
+            rename_to = line[len("rename to ") :]
         elif line.startswith("Binary files"):
             is_binary = True
         elif line.startswith("--- "):
