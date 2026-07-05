@@ -47,6 +47,10 @@ class NoPushConfig(BaseModel):
     provider: str = Field(default=DEFAULT_PROVIDER, description="LLM provider name.")
     model: str = Field(default=DEFAULT_MODEL, description="Model identifier.")
     api_key: str = Field(default="", description="API key (prefer credentials file).")
+    api_base: str | None = Field(
+        default=None,
+        description="Custom API base URL (e.g. for Azure OpenAI).",
+    )
 
     # Review behaviour
     review_depth: Literal["minimal", "standard", "thorough"] = Field(

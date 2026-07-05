@@ -44,6 +44,6 @@ DEFAULT_TIMEOUT_SECONDS: int = 120
 # Supported values
 # ---------------------------------------------------------------------------
 
-SUPPORTED_PROVIDERS: list[str] = ["openai", "anthropic", "gemini"]
+SUPPORTED_PROVIDERS: list[str] = ["openai", "gemini"]
 
 SUPPORTED_REVIEW_DEPTHS: list[str] = ["minimal", "standard", "thorough"]

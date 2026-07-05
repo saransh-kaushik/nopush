@@ -1,12 +1,24 @@
-"""Parse unified diff output from ``git diff``."""
+"""Parse unified diff output from ``git diff``.
+
+This module provides functions to:
+
+1. Run ``git diff`` commands and capture the raw output.
+2. Parse the raw unified diff text into structured :class:`FileDiff` objects.
+
+All git interactions use ``subprocess`` directly — no third-party git library
+is required.
+"""
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 from nopush.git.models import ChangeType, FileDiff, FileStatus, Hunk, HunkLine
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Language detection (extension → language name)
@@ -40,11 +52,26 @@ _EXTENSION_MAP: dict[str, str] = {
     ".css": "css",
     ".sql": "sql",
     ".dockerfile": "dockerfile",
+    ".scala": "scala",
+    ".r": "r",
+    ".R": "r",
+    ".lua": "lua",
+    ".zig": "zig",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".erl": "erlang",
+    ".tf": "hcl",
+    ".vue": "vue",
+    ".svelte": "svelte",
+    ".dart": "dart",
+    ".proto": "protobuf",
+    ".graphql": "graphql",
+    ".gql": "graphql",
 }
 
 # Regex for the ``@@ -old_start,old_count +new_start,new_count @@`` header
 _HUNK_HEADER_RE = re.compile(
-    r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)?$"
+    r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$"
 )
 
 
@@ -59,28 +86,57 @@ def _detect_language(file_path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def get_staged_diff() -> str:
+def get_staged_diff(cwd: str | None = None) -> str:
     """Return the unified diff for staged changes.
+
+    Parameters
+    ----------
+    cwd:
+        Working directory to run git in. Defaults to the current directory.
 
     Raises
     ------
     RuntimeError
         If ``git`` is not available or the current directory is not a repo.
     """
-    return _run_git("diff", "--staged", "--unified=3", "--no-color")
+    return _run_git("diff", "--staged", "--unified=3", "--no-color", cwd=cwd)
 
 
-def get_diff(ref_a: str = "HEAD", ref_b: str | None = None) -> str:
-    """Return the unified diff between two refs (or a ref and the working tree)."""
+def get_diff(
+    ref_a: str = "HEAD",
+    ref_b: str | None = None,
+    cwd: str | None = None,
+) -> str:
+    """Return the unified diff between two refs (or a ref and the working tree).
+
+    Parameters
+    ----------
+    ref_a:
+        The base reference (default ``HEAD``).
+    ref_b:
+        Optional second reference. If ``None``, diffs against the working tree.
+    cwd:
+        Working directory to run git in.
+    """
     args = ["diff", ref_a, "--unified=3", "--no-color"]
     if ref_b is not None:
         args.insert(2, ref_b)
-    return _run_git(*args)
+    return _run_git(*args, cwd=cwd)
 
 
-def get_file_diff(paths: list[str]) -> str:
-    """Return the diff for specific file paths."""
-    return _run_git("diff", "--staged", "--unified=3", "--no-color", "--", *paths)
+def get_file_diff(paths: list[str], cwd: str | None = None) -> str:
+    """Return the staged diff for specific file paths.
+
+    Parameters
+    ----------
+    paths:
+        File paths to restrict the diff to.
+    cwd:
+        Working directory to run git in.
+    """
+    return _run_git(
+        "diff", "--staged", "--unified=3", "--no-color", "--", *paths, cwd=cwd
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +144,10 @@ def get_file_diff(paths: list[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def parse_diff(raw_diff: str, ignore_patterns: list[str] | None = None) -> list[FileDiff]:
+def parse_diff(
+    raw_diff: str,
+    ignore_patterns: list[str] | None = None,
+) -> list[FileDiff]:
     """Parse a unified diff string into a list of :class:`FileDiff` objects.
 
     Parameters
@@ -97,6 +156,11 @@ def parse_diff(raw_diff: str, ignore_patterns: list[str] | None = None) -> list[
         Raw unified diff output from ``git diff``.
     ignore_patterns:
         Optional list of glob patterns. Files matching any pattern are excluded.
+
+    Returns
+    -------
+    list[FileDiff]
+        Structured representation of each file's changes.
     """
     if not raw_diff.strip():
         return []
@@ -104,7 +168,8 @@ def parse_diff(raw_diff: str, ignore_patterns: list[str] | None = None) -> list[
     ignore_patterns = ignore_patterns or []
     file_diffs: list[FileDiff] = []
 
-    # Split on "diff --git" boundaries
+    # Split on "diff --git" boundaries.  The first element is always empty
+    # (or contains text before the first diff header).
     file_sections = re.split(r"^diff --git ", raw_diff, flags=re.MULTILINE)
 
     for section in file_sections:
@@ -117,6 +182,7 @@ def parse_diff(raw_diff: str, ignore_patterns: list[str] | None = None) -> list[
 
         # Apply ignore patterns
         if _should_ignore(file_diff.path, ignore_patterns):
+            logger.debug("Ignoring file %s (matched ignore pattern)", file_diff.path)
             continue
 
         file_diffs.append(file_diff)
@@ -129,8 +195,21 @@ def parse_diff(raw_diff: str, ignore_patterns: list[str] | None = None) -> list[
 # ---------------------------------------------------------------------------
 
 
-def _run_git(*args: str) -> str:
-    """Execute a git command and return its stdout."""
+def _run_git(*args: str, cwd: str | None = None) -> str:
+    """Execute a git command and return its stdout.
+
+    Parameters
+    ----------
+    *args:
+        Arguments to pass to ``git``.
+    cwd:
+        Working directory. If ``None``, uses the current directory.
+
+    Raises
+    ------
+    RuntimeError
+        If git is not installed or the command fails.
+    """
     try:
         result = subprocess.run(
             ["git", *args],
@@ -138,6 +217,7 @@ def _run_git(*args: str) -> str:
             text=True,
             check=True,
             timeout=30,
+            cwd=cwd,
         )
     except FileNotFoundError as exc:
         msg = "git is not installed or not on PATH."
@@ -145,16 +225,25 @@ def _run_git(*args: str) -> str:
     except subprocess.CalledProcessError as exc:
         msg = f"git command failed: {exc.stderr.strip()}"
         raise RuntimeError(msg) from exc
+    except subprocess.TimeoutExpired as exc:
+        msg = "git command timed out after 30 seconds."
+        raise RuntimeError(msg) from exc
     return result.stdout
 
 
 def _parse_file_section(section: str) -> FileDiff | None:
-    """Parse a single file section of a unified diff."""
+    """Parse a single file section of a unified diff.
+
+    A file section starts with ``diff --git a/... b/...`` and contains
+    optional extended headers (``new file``, ``deleted file``, ``rename from``,
+    ``rename to``, ``index``, ``similarity index``), followed by ``---`` and
+    ``+++`` lines, and then hunk blocks.
+    """
     lines = section.split("\n")
     if not lines:
         return None
 
-    # Extract file paths from the "diff --git a/... b/..." line
+    # ── Extract file paths from the "diff --git a/... b/..." line ──
     first_line = lines[0]
     match = re.match(r"diff --git a/(.*) b/(.*)", first_line)
     if not match:
@@ -163,35 +252,58 @@ def _parse_file_section(section: str) -> FileDiff | None:
     old_path = match.group(1)
     new_path = match.group(2)
 
-    # Determine file status
+    # ── Scan extended header lines ──
     status = FileStatus.MODIFIED
     is_binary = False
-    header_end = 0
+    rename_from: str | None = None
+    rename_to: str | None = None
+    hunk_start_index = len(lines)  # Default: no hunks found
 
-    for i, line in enumerate(lines[1:], start=1):
+    i = 1
+    while i < len(lines):
+        line = lines[i]
+
         if line.startswith("new file"):
             status = FileStatus.ADDED
         elif line.startswith("deleted file"):
             status = FileStatus.DELETED
-        elif line.startswith("rename from"):
+        elif line.startswith("rename from "):
             status = FileStatus.RENAMED
+            rename_from = line[len("rename from "):]
+        elif line.startswith("rename to "):
+            rename_to = line[len("rename to "):]
         elif line.startswith("Binary files"):
             is_binary = True
         elif line.startswith("--- "):
-            header_end = i
+            # The `--- ` and `+++ ` lines are part of the diff header.
+            # The actual hunk data starts after `+++ `.
+            if i + 1 < len(lines) and lines[i + 1].startswith("+++ "):
+                hunk_start_index = i + 2  # skip both --- and +++
+            else:
+                hunk_start_index = i + 1
             break
-        elif line.startswith("@@"):
-            header_end = i
+        elif _HUNK_HEADER_RE.match(line):
+            # Some diffs (e.g. renames with no content change) may jump
+            # directly to a hunk header without --- / +++ lines.
+            hunk_start_index = i
             break
 
-    # Handle /dev/null paths
+        i += 1
+
+    # ── Update paths for renames ──
+    if rename_from is not None:
+        old_path = rename_from
+    if rename_to is not None:
+        new_path = rename_to
+
+    # ── Handle /dev/null paths ──
     if status == FileStatus.ADDED:
         old_path = "/dev/null"
     elif status == FileStatus.DELETED:
         new_path = "/dev/null"
 
-    # Parse hunks
-    hunks = _parse_hunks(lines[header_end:]) if not is_binary else []
+    # ── Parse hunks ──
+    hunks = _parse_hunks(lines[hunk_start_index:]) if not is_binary else []
 
     return FileDiff(
         old_path=old_path,
@@ -204,7 +316,11 @@ def _parse_file_section(section: str) -> FileDiff | None:
 
 
 def _parse_hunks(lines: list[str]) -> list[Hunk]:
-    """Parse hunk blocks from the body of a file diff."""
+    """Parse hunk blocks from the body of a file diff.
+
+    Each hunk starts with ``@@ -a,b +c,d @@`` and is followed by lines
+    prefixed with ``+`` (added), ``-`` (removed), or `` `` (context).
+    """
     hunks: list[Hunk] = []
     current_hunk: Hunk | None = None
     old_line = 0
@@ -273,6 +389,31 @@ def _parse_hunks(lines: list[str]) -> list[Hunk]:
 
 
 def _should_ignore(file_path: str, patterns: list[str]) -> bool:
-    """Check if a file path matches any of the ignore glob patterns."""
-    path = PurePosixPath(file_path)
-    return any(path.match(pattern) for pattern in patterns)
+    """Check if a file path matches any of the ignore glob patterns.
+
+    Supports simple globs (``*.py``), exact filenames (``package-lock.json``),
+    and directory prefixes (``vendor/``, ``vendor/*``).  This implementation
+    works consistently across Python 3.10+.
+    """
+    from fnmatch import fnmatch
+
+    for pattern in patterns:
+        # Directory prefix pattern — check if any path component matches
+        # e.g. "vendor/**" or "vendor/*" should match "vendor/lib/foo.py"
+        if "/" in pattern:
+            # Normalise: "vendor/**" → "vendor" prefix check
+            prefix = pattern.rstrip("/*")
+            if file_path == prefix or file_path.startswith(prefix + "/"):
+                return True
+            # Also try fnmatch on the full path for patterns like "src/*.py"
+            if fnmatch(file_path, pattern):
+                return True
+        else:
+            # Simple basename pattern — match against the filename only
+            basename = PurePosixPath(file_path).name
+            if fnmatch(basename, pattern):
+                return True
+            # Also try against the full path
+            if fnmatch(file_path, pattern):
+                return True
+    return False

@@ -66,3 +66,7 @@ class ProviderAuthError(ProviderError):
 
 class ProviderRateLimitError(ProviderError):
     """Raised when the API rate limit is exceeded."""
+
+
+class ProviderNetworkError(ProviderError):
+    """Raised when a network-level error occurs (timeout, DNS, connection)."""

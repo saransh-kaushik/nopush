@@ -49,6 +49,16 @@ class Hunk(BaseModel):
     header: str = Field(default="", description="Optional hunk header (function name, etc.).")
     lines: list[HunkLine] = Field(default_factory=list)
 
+    @property
+    def added_lines(self) -> list[HunkLine]:
+        """Return only the added lines in this hunk."""
+        return [line for line in self.lines if line.change_type == ChangeType.ADDED]
+
+    @property
+    def removed_lines(self) -> list[HunkLine]:
+        """Return only the removed lines in this hunk."""
+        return [line for line in self.lines if line.change_type == ChangeType.REMOVED]
+
 
 class FileDiff(BaseModel):
     """Parsed diff for a single file."""
@@ -69,3 +79,13 @@ class FileDiff(BaseModel):
         if self.new_path and self.new_path != "/dev/null":
             return self.new_path
         return self.old_path
+
+    @property
+    def total_additions(self) -> int:
+        """Total number of added lines across all hunks."""
+        return sum(len(h.added_lines) for h in self.hunks)
+
+    @property
+    def total_deletions(self) -> int:
+        """Total number of removed lines across all hunks."""
+        return sum(len(h.removed_lines) for h in self.hunks)
