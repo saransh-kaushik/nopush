@@ -1,49 +1,74 @@
-# NoPush
+# 🚀 NoPush
 
-NoPush is a local-first, AI-powered code review assistant and a lightweight alternative to CodeRabbit. It helps developers review staged changes, Git diffs, or pull request updates using their own API keys and preferred LLM provider.
+[![PyPI version](https://img.shields.io/pypi/v/nopush.svg)](https://pypi.org/project/nopush/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Why NoPush?
+**NoPush** is a local-first, AI-powered code review assistant. It helps developers review staged changes, Git diffs, or pull request updates directly from the terminal using their own API keys and preferred LLM provider.
 
-NoPush is designed to make AI code review fast, private, and easy to use from the terminal. Instead of sending your workflow into a hosted platform, NoPush keeps the experience local and developer-friendly while still giving you high-quality review feedback.
+## ✨ Why NoPush?
 
-## Core Features
+NoPush is designed to make AI code review fast, private, and easy to use from your local environment. Instead of sending your code to a hosted third-party platform, NoPush keeps the experience local and developer-friendly, while still delivering high-quality, structured review feedback.
 
-- **CLI-first workflow** for fast reviews from the terminal
-- **Bring Your Own Key (BYOK)** support for OpenAI, Anthropic, Gemini, and more
-- **Git diff parsing** for staged changes, diffs, or specific files
-- **Prompt builder** that turns code changes into structured LLM input
-- **Provider abstraction layer** for multiple AI models
-- **Structured review output** with severity, file, line number, explanation, and suggestion
-- **Clean terminal rendering** with readable, colorized feedback
-- **Optional GitHub PR comments** for posting review results back to pull requests
-- **Project configuration** through `nopush.yaml`
-- **Python packaging** for easy installation with `pip`
+## 📦 Features
 
-## Quick Start
+- **CLI-First Workflow**: Fast and seamless reviews directly from your terminal.
+- **Bring Your Own Key (BYOK)**: Full support for top-tier providers like OpenAI, Anthropic, Gemini, and more.
+- **Git Diff Parsing**: Intelligently analyzes staged changes, uncommitted diffs, or specific files.
+- **Smart Prompt Builder**: Automatically chunks and structures your code changes for optimal LLM context.
+- **Provider Abstraction Layer**: Easily switch between different AI models and providers.
+- **Structured Feedback**: Get actionable insights with severity levels, file paths, line numbers, explanations, and concrete suggestions.
+- **Clean Terminal UI**: Highly readable, colorized feedback rendered beautifully in your console.
+- **Configurable**: Easily adapt to your project needs via `nopush.yaml`.
+
+## 🛠️ Installation
+
+You can easily install NoPush via `pip`:
 
 ```bash
-nopush init      # Configure API key and model
-nopush review    # Review staged Git changes
+pip install nopush
 ```
 
-## Configuration
+## 🚀 Quick Start
 
-NoPush uses a local configuration file, `nopush.yaml`, to store project preferences such as:
+Initialize NoPush in your project and configure your provider and API key:
 
-- Preferred model
-- API provider
-- Ignored files or directories
-- Review depth
-- Custom review settings
+```bash
+nopush init
+```
 
-Example:
+Review your currently staged Git changes:
+
+```bash
+nopush review
+```
+
+## ⚙️ Configuration
+
+NoPush uses a local configuration file named `nopush.yaml` in your project root to store your preferences. 
+
+Example `nopush.yaml`:
 
 ```yaml
 provider: openai
-model: gpt-4.1
+model: gpt-4o
 review_depth: standard
 ignore:
   - node_modules/
   - dist/
   - .git/
+  - __pycache__/
 ```
+
+**Available configuration options:**
+- `provider`: The LLM provider to use (e.g., `openai`, `anthropic`, `gemini`).
+- `model`: The specific model to use for the review.
+- `review_depth`: How deep the review should be (`light`, `standard`, `deep`).
+- `ignore`: A list of directories or files to ignore during the review process.
+
+## 🤝 Contributing
+
+Contributions are welcome! If you'd like to improve NoPush, please check out our [Contributing Guidelines](CONTRIBUTING.md) and feel free to open an issue or submit a pull request on the [GitHub repository](https://github.com/saransh-kaushik/nopush).
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
