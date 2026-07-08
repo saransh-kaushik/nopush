@@ -67,11 +67,15 @@ class ConfigManager:
         if overrides:
             layers.update(overrides)
 
-        # Merge API key from credentials file if not set by higher layers
-        if not layers.get("api_key"):
-            creds = ConfigManager.load_credentials()
-            if creds.api_key:
-                layers.setdefault("api_key", creds.api_key)
+        # Merge credentials file as the lowest-priority layer (provider, model, api_key).
+        # Higher layers (env vars, project config, CLI flags) will override these.
+        creds = ConfigManager.load_credentials()
+        if creds.api_key:
+            layers.setdefault("api_key", creds.api_key)
+        if creds.provider:
+            layers.setdefault("provider", creds.provider)
+        if creds.model:
+            layers.setdefault("model", creds.model)
 
         return NoPushConfig(**layers)
 

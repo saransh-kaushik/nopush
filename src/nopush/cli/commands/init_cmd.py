@@ -6,9 +6,11 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
+from rich.table import Table
 
 from nopush.config.constants import (
-    DEFAULT_MODEL,
+    PROVIDER_DEFAULT_MODELS,
+    PROVIDER_MODELS,
     SUPPORTED_PROVIDERS,
 )
 from nopush.config.manager import ConfigManager
@@ -16,18 +18,68 @@ from nopush.config.schema import ProviderCredentials
 
 console = Console()
 
-# Default models per provider
-_PROVIDER_DEFAULT_MODELS: dict[str, str] = {
-    "openai": "gpt-4.1",
-    "anthropic": "claude-sonnet-4-6",
-    "gemini": "gemini-2.0-flash",
-}
-
 _PROVIDER_KEY_HINTS: dict[str, str] = {
     "openai": "sk-...",
     "anthropic": "sk-ant-...",
     "gemini": "AIza...",
 }
+
+
+def _pick_model(provider: str) -> str:
+    """Interactively select a model for *provider*.
+
+    Renders a numbered table of known models and lets the user pick by
+    number, or choose "other" to type a custom model ID.
+
+    Returns the chosen model identifier string.
+    """
+    models = PROVIDER_MODELS.get(provider, [])
+    default_model = PROVIDER_DEFAULT_MODELS.get(provider, "")
+
+    # Build a pretty table
+    table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1))
+    table.add_column("#", style="cyan", width=3)
+    table.add_column("Model ID", style="bold white")
+    table.add_column("Description", style="dim")
+
+    for i, (model_id, description) in enumerate(models, 1):
+        row_style = "bold green" if model_id == default_model else ""
+        marker = " ★" if model_id == default_model else ""
+        table.add_row(str(i), model_id + marker, description, style=row_style)
+
+    console.print()
+    console.print(table)
+
+    default_index = next(
+        (i + 1 for i, (mid, _) in enumerate(models) if mid == default_model),
+        1,
+    )
+
+    while True:
+        raw = Prompt.ask(
+            f"Select a model [1-{len(models)}]",
+            default=str(default_index),
+        )
+        try:
+            choice = int(raw.strip())
+        except ValueError:
+            console.print(f"[red]Please enter a number between 1 and {len(models)}.[/red]")
+            continue
+
+        if not 1 <= choice <= len(models):
+            console.print(f"[red]Please enter a number between 1 and {len(models)}.[/red]")
+            continue
+
+        selected_id, _ = models[choice - 1]
+
+        if selected_id == "other":
+            custom = Prompt.ask("Enter custom model ID").strip()
+            if not custom:
+                console.print("[red]Model ID cannot be empty.[/red]")
+                continue
+            return custom
+
+        return selected_id
 
 
 def init_callback() -> None:
@@ -39,7 +91,7 @@ def init_callback() -> None:
     console.print(
         Panel.fit(
             "[bold cyan]NoPush — First-time Setup[/bold cyan]\n"
-            "[dim]Configure your AI provider and API key.[/dim]",
+            "[dim]Configure your AI provider, API key, and model.[/dim]",
             border_style="cyan",
         )
     )
@@ -79,13 +131,13 @@ def init_callback() -> None:
         raise typer.Exit(code=1)
 
     # --- Step 3: Model ---
-    default_model = _PROVIDER_DEFAULT_MODELS.get(provider_input, DEFAULT_MODEL)
     console.print("\n[bold]Step 3 of 3[/bold] — Choose a model")
-    console.print(f"  [dim]Default for {provider_input}: {default_model}[/dim]")
+    console.print(
+        f"  [dim]Select from the list below, or choose [bold]Other[/bold] "
+        f"to enter a custom model ID.[/dim]"
+    )
 
-    model = Prompt.ask("Model", default=default_model)
-    if not model.strip():
-        model = default_model
+    model = _pick_model(provider_input)
 
     # --- Save credentials ---
     credentials = ProviderCredentials(

@@ -82,7 +82,7 @@ class TestRenderClean:
         renderer.render(result)
         output = buffer.getvalue()
 
-        assert "No issues found" in output
+        assert "No issues were found" in output
 
     def test_clean_review_shows_file_count(self) -> None:
         """The clean review should mention how many files were reviewed."""
@@ -145,7 +145,7 @@ class TestRenderWithIssues:
         output = buffer.getvalue()
 
         assert "2" in output  # total issues
-        assert "NoPush Review Summary" in output
+        assert "NoPush Review" in output
 
     def test_summary_shows_files_reviewed(self) -> None:
         """The summary should show how many files were reviewed."""
@@ -208,7 +208,7 @@ class TestRenderWithIssues:
         renderer.render(result)
         output = buffer.getvalue()
 
-        assert "Suggested fix" in output
+        assert "Suggested Fix" in output
 
     def test_null_suggestion_no_crash(self) -> None:
         """A comment with no suggestion should render without crashing."""
@@ -220,8 +220,8 @@ class TestRenderWithIssues:
         output = buffer.getvalue()
 
         assert "Test issue" in output
-        # Should NOT show "Suggested fix" when suggestion is None
-        assert "Suggested fix" not in output
+        # Should NOT show "Suggested Fix" when suggestion is None
+        assert "Suggested Fix" not in output
 
     def test_provider_and_model_in_summary(self) -> None:
         """Provider and model should appear in the summary."""

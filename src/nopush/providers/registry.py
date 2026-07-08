@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 _PROVIDER_MAP: dict[str, str] = {
     "openai": "nopush.providers.openai.OpenAIProvider",
     "gemini": "nopush.providers.gemini.GeminiProvider",
+    "anthropic": "nopush.providers.anthropic.AnthropicProvider",
 }
 
 

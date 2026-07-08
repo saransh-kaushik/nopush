@@ -44,6 +44,11 @@ def review_callback(
         "--max-files",
         help="Maximum number of files to review.",
     ),
+    no_copy: bool = typer.Option(
+        False,
+        "--no-copy",
+        help="Disable automatic copy of review output to the clipboard.",
+    ),
 ) -> None:
     """Analyze staged Git changes and display AI-powered review suggestions.
 
@@ -54,7 +59,12 @@ def review_callback(
     from nopush.cli.renderer import ReviewRenderer
     from nopush.config.manager import ConfigManager
     from nopush.git.diff_parser import get_staged_diff, parse_diff
-    from nopush.providers.base import ProviderAuthError, ProviderError
+    from nopush.providers.base import (
+        ProviderAuthError,
+        ProviderError,
+        ProviderNetworkError,
+        ProviderRateLimitError,
+    )
     from nopush.providers.registry import get_provider
     from nopush.review.engine import ReviewEngine
 
@@ -129,10 +139,11 @@ def review_callback(
     try:
         llm_provider = get_provider(config)
     except ProviderAuthError as exc:
-        console.print(f"[red]Authentication error:[/red] {exc}")
+        console.print(f"\n[bold red]Authentication error:[/bold red] {exc}")
+        console.print("[dim]Run [bold]nopush init[/bold] to update your API key.[/dim]")
         raise typer.Exit(code=1) from exc
     except ProviderError as exc:
-        console.print(f"[red]Provider error:[/red] {exc}")
+        console.print(f"\n[bold red]Provider error:[/bold red] {exc}")
         raise typer.Exit(code=1) from exc
 
     # ── Step 6: Run review ──
@@ -158,16 +169,30 @@ def review_callback(
         try:
             result = engine.review(file_diffs)
         except ProviderAuthError as exc:
-            console.print(f"\n[red]Authentication failed:[/red] {exc}")
-            console.print("[dim]Check your API key with [bold]nopush init[/bold].[/dim]")
+            console.print(f"\n[bold red]Authentication failed:[/bold red] {exc}")
+            console.print(
+                "[dim]Your API key was rejected. "
+                "Run [bold]nopush init[/bold] to update it.[/dim]"
+            )
+            raise typer.Exit(code=1) from exc
+        except ProviderNetworkError as exc:
+            console.print(f"\n[bold red]Network error:[/bold red] {exc}")
+            console.print(
+                "[dim]Check your internet connection. "
+                "If the issue persists, the provider may be down — try again later.[/dim]"
+            )
+            raise typer.Exit(code=1) from exc
+        except ProviderRateLimitError as exc:
+            console.print(f"\n[bold yellow]Rate limit reached:[/bold yellow] {exc}")
+            console.print("[dim]Wait a moment and try again.[/dim]")
             raise typer.Exit(code=1) from exc
         except ProviderError as exc:
-            console.print(f"\n[red]Provider error:[/red] {exc}")
+            console.print(f"\n[bold red]Provider error:[/bold red] {exc}")
             raise typer.Exit(code=1) from exc
         except Exception as exc:
-            console.print(f"\n[red]Unexpected error during review:[/red] {exc}")
+            console.print(f"\n[bold red]Unexpected error during review:[/bold red] {exc}")
             raise typer.Exit(code=1) from exc
 
     # ── Step 7: Render results ──
     renderer = ReviewRenderer(console=console)
-    renderer.render(result)
+    renderer.render(result, copy=not no_copy)

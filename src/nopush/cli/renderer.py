@@ -4,71 +4,63 @@ Renders :class:`~nopush.review.models.ReviewResult` objects as beautiful,
 colour-coded terminal output using the Rich library.
 
 Features:
-- Summary header with issue counts by severity
-- Colour-coded panels for each review comment
+- Compact summary dashboard with issue counts by severity
+- Structured issue panels with clear visual hierarchy
 - Syntax-highlighted code suggestions
-- Congratulatory message when no issues are found
+- Distinct severity styling (critical / warning / suggestion / nitpick)
+- Polished footer and empty-state celebration panel
 """
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import sys
 from typing import TYPE_CHECKING
 
+from rich.align import Align
+from rich.columns import Columns
 from rich.console import Console, Group, RenderableType
+from rich.padding import Padding
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.text import Text
 
 if TYPE_CHECKING:
     from nopush.review.models import ReviewComment, ReviewResult
 
 # ---------------------------------------------------------------------------
-# Severity styling
+# Severity configuration
 # ---------------------------------------------------------------------------
 
-_SEVERITY_STYLES: dict[str, tuple[str, str]] = {
-    "critical": ("bold red", "🔴"),
-    "warning": ("bold yellow", "🟡"),
-    "suggestion": ("bold blue", "🔵"),
-    "nitpick": ("dim", "⚪"),
+# (rich_style, icon, label)
+_SEVERITY_CONFIG: dict[str, tuple[str, str, str]] = {
+    "critical":   ("bold red",    "●", "CRITICAL"),
+    "warning":    ("yellow",      "●", "WARNING"),
+    "suggestion": ("bold blue",   "●", "SUGGESTION"),
+    "nitpick":    ("dim",         "●", "NITPICK"),
 }
 
 _SEVERITY_BORDER: dict[str, str] = {
-    "critical": "red",
-    "warning": "yellow",
+    "critical":   "red",
+    "warning":    "yellow",
     "suggestion": "blue",
-    "nitpick": "dim",
+    "nitpick":    "bright_black",
 }
 
-# Map file extensions to Rich Syntax lexer names
-_LANGUAGE_LEXER_MAP: dict[str, str] = {
-    "python": "python",
-    "javascript": "javascript",
-    "typescript": "typescript",
-    "jsx": "jsx",
-    "tsx": "tsx",
-    "java": "java",
-    "go": "go",
-    "rust": "rust",
-    "ruby": "ruby",
-    "php": "php",
-    "c": "c",
-    "cpp": "cpp",
-    "csharp": "csharp",
-    "swift": "swift",
-    "bash": "bash",
-    "yaml": "yaml",
-    "json": "json",
-    "toml": "toml",
-    "html": "html",
-    "css": "css",
-    "sql": "sql",
-    "markdown": "markdown",
-    "kotlin": "kotlin",
-    "scala": "scala",
-    "dart": "dart",
+_SEVERITY_EMOJI: dict[str, str] = {
+    "critical":   "🔴",
+    "warning":    "🟡",
+    "suggestion": "🔵",
+    "nitpick":    "⚪",
 }
 
+
+# ---------------------------------------------------------------------------
+# Main renderer
+# ---------------------------------------------------------------------------
 
 class ReviewRenderer:
     """Formats and renders :class:`ReviewResult` objects to the terminal.
@@ -82,11 +74,19 @@ class ReviewRenderer:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
 
-    def render(self, result: ReviewResult) -> None:
+    def render(self, result: ReviewResult, *, copy: bool = True) -> None:
         """Render a full review result to the console.
 
-        Displays a summary header, followed by individual comment panels.
-        If no issues are found, shows a congratulatory message.
+        Displays a summary dashboard, followed by individual comment panels.
+        If no issues are found, shows a congratulatory empty-state message.
+
+        Parameters
+        ----------
+        result:
+            The review result to render.
+        copy:
+            When *True* (default), attempt to copy a plain-text summary of
+            all issues to the system clipboard after rendering.
         """
         self.console.print()
 
@@ -94,178 +94,271 @@ class ReviewRenderer:
             self._render_clean(result)
             return
 
-        # Summary panel
-        summary = self._render_summary(result)
-        self.console.print(summary)
+        # Summary dashboard
+        self.console.print(self._render_summary(result))
         self.console.print()
 
-        # Individual comments
-        for i, comment in enumerate(result.comments, 1):
-            panel = self._render_comment(comment, index=i)
-            self.console.print(panel)
+        # Individual issue panels
+        for comment in result.comments:
+            self.console.print(self._render_comment(comment))
             self.console.print()
 
         # Footer
         self._render_footer(result)
 
+        # Clipboard
+        if copy:
+            self._maybe_copy_to_clipboard(result)
+
     # ------------------------------------------------------------------
-    # Summary
+    # Summary dashboard
     # ------------------------------------------------------------------
 
     def _render_summary(self, result: ReviewResult) -> Panel:
-        """Render a summary panel with issue counts by severity."""
+        """Render a compact summary dashboard with two-column layout."""
         from nopush.review.models import Severity
 
         counts = result.count_by_severity()
 
-        # Build severity counts line
-        parts: list[Text] = []
+        # --- Left column: high-level stats ---
+        stats = Table.grid(padding=(0, 2))
+        stats.add_column(style="dim", no_wrap=True)
+        stats.add_column(style="bold")
+
+        stats.add_row("Files Reviewed", str(result.files_reviewed))
+        stats.add_row("Total Issues",   str(result.total_issues))
+
+        # --- Severity breakdown ---
+        severity_table = Table.grid(padding=(0, 2))
+        severity_table.add_column(no_wrap=True)   # emoji + label
+        severity_table.add_column(style="bold")   # count
+
         for severity in Severity:
             count = counts.get(severity, 0)
-            style, emoji = _SEVERITY_STYLES.get(severity.value, ("", ""))
-            segment = Text(f"{emoji} {count} {severity.value}", style=style)
-            parts.append(segment)
+            sev_val = severity.value
+            style, dot, label = _SEVERITY_CONFIG.get(sev_val, ("", "●", sev_val.upper()))
+            emoji = _SEVERITY_EMOJI.get(sev_val, "")
 
-        counts_line = Text("  ").join(parts)
+            label_text = Text()
+            label_text.append(f"{emoji} ", style="")
+            label_text.append(label, style=style)
 
-        # Build the content
-        content = Text()
-        content.append("Files reviewed: ", style="bold")
-        content.append(str(result.files_reviewed))
-        content.append("  •  ")
-        content.append("Total issues: ", style="bold")
-        content.append(str(result.total_issues))
-        content.append("\n")
-        content.append(counts_line)
-        content.append("\n\n")
-        content.append("Provider: ", style="dim")
-        content.append(result.provider, style="dim bold")
-        content.append("  •  ", style="dim")
-        content.append("Model: ", style="dim")
-        content.append(result.model, style="dim bold")
+            count_text = Text(str(count), style=style if count > 0 else "dim")
+            severity_table.add_row(label_text, count_text)
+
+        # --- Right column: provider info ---
+        meta = Table.grid(padding=(0, 2))
+        meta.add_column(style="dim", no_wrap=True)
+        meta.add_column(style="bold dim")
+
+        meta.add_row("Provider", result.provider or "—")
+        meta.add_row("Model",    result.model    or "—")
+
+        # Compose the full dashboard grid
+        dashboard = Table.grid(padding=(0, 4))
+        dashboard.add_column(ratio=2)   # stats + severity
+        dashboard.add_column(ratio=1)   # meta
+
+        left = Group(
+            stats,
+            Text(""),  # spacer
+            severity_table,
+        )
+
+        dashboard.add_row(left, Padding(meta, (2, 0, 0, 0)))
 
         return Panel(
-            content,
-            title="[bold]NoPush Review Summary[/bold]",
+            Padding(dashboard, (0, 1)),
+            title="[bold]NoPush Review[/bold]",
             border_style="cyan",
             padding=(1, 2),
         )
 
     # ------------------------------------------------------------------
-    # Individual comments
+    # Individual issue panels
     # ------------------------------------------------------------------
 
-    def _render_comment(self, comment: ReviewComment, index: int = 1) -> Panel:
-        """Render a single review comment as a styled panel."""
-        severity_val = comment.severity.value
-        style, emoji = _SEVERITY_STYLES.get(severity_val, ("", ""))
-        border = _SEVERITY_BORDER.get(severity_val, "white")
+    def _render_comment(self, comment: ReviewComment) -> Panel:
+        """Render a single review comment as a structured, styled panel."""
+        sev_val = comment.severity.value
+        style, dot, label = _SEVERITY_CONFIG.get(sev_val, ("", "●", sev_val.upper()))
+        border = _SEVERITY_BORDER.get(sev_val, "white")
 
-        # Title line
-        title_text = Text()
-        title_text.append(f"{emoji} ", style=style)
-        title_text.append(f"[{severity_val.upper()}] ", style=style)
-        title_text.append(comment.title, style="bold")
+        # Severity badge
+        severity_badge = Text()
+        severity_badge.append(f"{dot} {label}", style=style)
 
-        # Location line
+        # Title
+        title_text = Text(comment.title, style="bold")
+
+        # File location
         location = Text()
         location.append("📁 ", style="dim")
         location.append(comment.file_path, style="cyan")
-        location.append(f":{comment.line_number}", style="cyan bold")
+        if comment.line_number:
+            location.append(f":{comment.line_number}", style="cyan dim")
 
-        # Explanation
-        explanation = Text(comment.explanation, style="")
+        # Section: why this matters
+        why_header = Text("Why this matters", style="bold dim")
+        explanation_text = Text(comment.explanation)
 
-        # Build content
-        content = Text()
-        content.append_text(title_text)
-        content.append("\n\n")
-        content.append_text(location)
-        content.append("\n\n")
-        content.append_text(explanation)
+        # Assemble the text block
+        body = Group(
+            severity_badge,
+            Text(""),
+            title_text,
+            Text(""),
+            location,
+            Text(""),
+            why_header,
+            explanation_text,
+        )
 
-        # Code suggestion
+        panel_parts: list[RenderableType] = [body]
+
+        # Code suggestion block
         if comment.suggestion:
-            content.append("\n\n")
-            content.append("💡 Suggested fix:", style="bold green")
-            content.append("\n")
+            fix_header = Text()
+            fix_header.append("💡 Suggested Fix", style="bold green")
 
-        panel_content: list[RenderableType] = [content]
-
-        if comment.suggestion:
-            # Infer language from file path for syntax highlighting
             lexer = self._infer_lexer(comment.file_path)
-            syntax = Syntax(
+            code_block = Syntax(
                 comment.suggestion,
                 lexer,
                 theme="monokai",
                 line_numbers=False,
-                padding=1,
+                padding=(1, 1),
             )
-            panel_content.append(syntax)
 
-        # Build the panel with a group of renderables
-        group = Group(*panel_content)
+            panel_parts.append(Text(""))
+            panel_parts.append(Rule(style="dim"))
+            panel_parts.append(Text(""))
+            panel_parts.append(fix_header)
+            panel_parts.append(code_block)
 
         return Panel(
-            group,
-            title=f"[{style}]Issue #{index}[/{style}]",
+            Group(*panel_parts),
             border_style=border,
-            padding=(0, 2),
+            padding=(1, 2),
         )
 
     # ------------------------------------------------------------------
-    # Clean code / no issues
+    # Empty state
     # ------------------------------------------------------------------
 
     def _render_clean(self, result: ReviewResult) -> None:
-        """Render a congratulatory message when no issues are found."""
-        content = Text()
-        content.append("✨ ", style="bold green")
-        content.append("No issues found!", style="bold green")
-        content.append("\n\n")
-        content.append(
-            "Your code looks great. No critical bugs, warnings, or suggestions were identified.",
-            style="",
-        )
-        content.append("\n\n")
-        content.append("Files reviewed: ", style="dim")
-        content.append(str(result.files_reviewed), style="dim bold")
-        content.append("  •  ", style="dim")
-        content.append("Provider: ", style="dim")
-        content.append(result.provider, style="dim bold")
-        content.append("  •  ", style="dim")
-        content.append("Model: ", style="dim")
-        content.append(result.model, style="dim bold")
+        """Render a celebratory panel when no issues are found."""
+        # Stats row
+        meta = Table.grid(padding=(0, 3))
+        meta.add_column(style="dim")
+        meta.add_column(style="bold dim")
 
-        panel = Panel(
-            content,
-            title="[bold green]NoPush Review[/bold green]",
-            border_style="green",
-            padding=(1, 2),
+        meta.add_row("Files Reviewed", str(result.files_reviewed))
+        meta.add_row("Provider",       result.provider or "—")
+        meta.add_row("Model",          result.model    or "—")
+
+        content = Group(
+            Text("✨  Excellent!", style="bold green"),
+            Text(""),
+            Text("No issues were found.", style="bold"),
+            Text("Your code looks clean and well-structured.", style="dim"),
+            Text(""),
+            meta,
         )
-        self.console.print(panel)
+
+        self.console.print(
+            Panel(
+                Padding(content, (0, 1)),
+                title="[bold green]NoPush Review[/bold green]",
+                border_style="green",
+                padding=(1, 2),
+            )
+        )
 
     # ------------------------------------------------------------------
     # Footer
     # ------------------------------------------------------------------
 
     def _render_footer(self, result: ReviewResult) -> None:
-        """Render a minimal footer after all comments."""
+        """Render a clean footer rule after all comments."""
         from nopush.review.models import Severity
 
         counts = result.count_by_severity()
         critical = counts.get(Severity.CRITICAL, 0)
 
+        self.console.print(Rule(style="dim"))
+        self.console.print()
+
+        # Centre-aligned summary line
+        summary = Text(justify="center")
+        summary.append("Review Complete", style="bold")
+        summary.append(f"   {result.total_issues} issue(s) found", style="")
+
+        self.console.print(Align.center(summary))
+
         if critical > 0:
-            self.console.print(
-                f"  [bold red]⚠  {critical} critical issue(s) "
-                f"require immediate attention.[/bold red]"
+            attention = Text(justify="center")
+            attention.append(
+                f"{critical} critical issue(s) require immediate attention.",
+                style="bold red",
             )
-        self.console.print(
-            f"  [dim]Review complete — {result.total_issues} issue(s) "
-            f"across {result.files_reviewed} file(s).[/dim]\n"
-        )
+            self.console.print(Align.center(attention))
+
+        self.console.print()
+        self.console.print(Rule(style="dim"))
+        self.console.print()
+
+    # ------------------------------------------------------------------
+    # Clipboard
+    # ------------------------------------------------------------------
+
+    def _maybe_copy_to_clipboard(self, result: ReviewResult) -> None:
+        """Attempt to copy a plain-text issue summary to the system clipboard.
+
+        Tries the following commands in order, stopping at the first one found:
+        - ``xclip`` (Linux/X11)
+        - ``xsel`` (Linux/X11)
+        - ``wl-copy`` (Linux/Wayland)
+        - ``pbcopy`` (macOS)
+        - ``clip`` (Windows)
+
+        On success, prints a brief "copied" confirmation.
+        On failure (tool not found or subprocess error), prints a dim hint.
+        """
+        text = _build_plaintext_summary(result)
+        cmd = _detect_clipboard_cmd()
+
+        if cmd is None:
+            self.console.print(
+                Align.center(
+                    Text(
+                        "📋  Install xclip / xsel / wl-copy to enable auto-copy",
+                        style="dim",
+                    )
+                )
+            )
+            self.console.print()
+            return
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=text.encode(),
+                check=True,
+                capture_output=True,
+            )
+            _ = proc  # success
+            self.console.print(
+                Align.center(Text("📋  Review copied to clipboard", style="dim cyan"))
+            )
+        except (subprocess.CalledProcessError, OSError):
+            self.console.print(
+                Align.center(
+                    Text("📋  Could not copy to clipboard", style="dim")
+                )
+            )
+        finally:
+            self.console.print()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -277,34 +370,111 @@ class ReviewRenderer:
         from pathlib import PurePosixPath
 
         suffix = PurePosixPath(file_path).suffix.lower()
-        # Simple extension -> lexer mapping
         ext_map: dict[str, str] = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".jsx": "jsx",
-            ".tsx": "tsx",
-            ".java": "java",
-            ".go": "go",
-            ".rs": "rust",
-            ".rb": "ruby",
-            ".php": "php",
-            ".c": "c",
-            ".cpp": "cpp",
-            ".h": "c",
-            ".hpp": "cpp",
-            ".cs": "csharp",
+            ".py":    "python",
+            ".js":    "javascript",
+            ".ts":    "typescript",
+            ".jsx":   "jsx",
+            ".tsx":   "tsx",
+            ".java":  "java",
+            ".go":    "go",
+            ".rs":    "rust",
+            ".rb":    "ruby",
+            ".php":   "php",
+            ".c":     "c",
+            ".cpp":   "cpp",
+            ".h":     "c",
+            ".hpp":   "cpp",
+            ".cs":    "csharp",
             ".swift": "swift",
-            ".sh": "bash",
-            ".yaml": "yaml",
-            ".yml": "yaml",
-            ".json": "json",
-            ".toml": "toml",
-            ".html": "html",
-            ".css": "css",
-            ".sql": "sql",
-            ".kt": "kotlin",
+            ".sh":    "bash",
+            ".yaml":  "yaml",
+            ".yml":   "yaml",
+            ".json":  "json",
+            ".toml":  "toml",
+            ".html":  "html",
+            ".css":   "css",
+            ".sql":   "sql",
+            ".kt":    "kotlin",
             ".scala": "scala",
-            ".dart": "dart",
+            ".dart":  "dart",
         }
         return ext_map.get(suffix, "text")
+
+
+# ---------------------------------------------------------------------------
+# Module-level clipboard helpers
+# ---------------------------------------------------------------------------
+
+
+def _detect_clipboard_cmd() -> list[str] | None:
+    """Return the first available clipboard command for the current platform.
+
+    Checks (in order):
+    - ``xclip`` — X11 (Linux)
+    - ``xsel``  — X11 (Linux)
+    - ``wl-copy`` — Wayland (Linux)
+    - ``pbcopy`` — macOS
+    - ``clip``   — Windows
+
+    Returns ``None`` when no suitable tool is found.
+    """
+    candidates: list[list[str]] = [
+        ["xclip", "-selection", "clipboard"],
+        ["xsel", "--clipboard", "--input"],
+        ["wl-copy"],
+        ["pbcopy"],
+        ["clip"],
+    ]
+    for cmd in candidates:
+        if shutil.which(cmd[0]) is not None:
+            return cmd
+    return None
+
+
+def _build_plaintext_summary(result: "ReviewResult") -> str:
+    """Serialise *result* as human-readable plain text suitable for pasting.
+
+    Each issue is rendered as a labelled block::
+
+        [CRITICAL] Title (file.py:42)
+        Why this matters:
+        <explanation>
+
+        Suggested Fix:
+        <suggestion>
+
+        ──────────────────────────────────────────
+
+    The output ends with a short summary line.
+    """
+    lines: list[str] = []
+    sep = "─" * 60
+
+    lines.append(f"NoPush Review — {result.total_issues} issue(s) found")
+    lines.append(f"Provider: {result.provider or '—'}  |  Model: {result.model or '—'}")
+    lines.append(sep)
+    lines.append("")
+
+    for comment in result.comments:
+        sev = comment.severity.value.upper()
+        loc = comment.file_path
+        if comment.line_number:
+            loc += f":{comment.line_number}"
+
+        lines.append(f"[{sev}] {comment.title}")
+        lines.append(f"📁 {loc}")
+        lines.append("")
+        lines.append("Why this matters:")
+        lines.append(comment.explanation)
+
+        if comment.suggestion:
+            lines.append("")
+            lines.append("Suggested Fix:")
+            lines.append(comment.suggestion)
+
+        lines.append("")
+        lines.append(sep)
+        lines.append("")
+
+    return "\n".join(lines)

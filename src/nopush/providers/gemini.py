@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 _MAX_RETRIES = 3
 _INITIAL_BACKOFF_SECONDS = 1.0
-_DEFAULT_MODEL = "gemini-2.5-flash"
+_DEFAULT_MODEL = "gemini-3.5-flash"
 
 
 class GeminiProvider(LLMProvider):
@@ -58,7 +58,7 @@ class GeminiProvider(LLMProvider):
             raise ProviderAuthError(msg)
 
         self._api_key = config.api_key
-        self._model = config.model if config.model != "gpt-4.1" else _DEFAULT_MODEL
+        self._model = config.model if config.model else _DEFAULT_MODEL
         self._base_url = (config.api_base or _DEFAULT_BASE_URL).rstrip("/")
         self._timeout = config.timeout
 
@@ -92,16 +92,30 @@ class GeminiProvider(LLMProvider):
                 if response.status_code == 200:
                     return self._extract_content(response.json())
 
+                # Always extract the API error detail for better diagnostics
+                error_detail = self._extract_error_message(response)
+
                 if response.status_code in (401, 403):
-                    error_detail = self._extract_error_message(response)
                     msg = (
-                        f"Gemini authentication failed ({response.status_code}). "
-                        f"Check your API key. Detail: {error_detail}"
+                        f"Gemini authentication failed (HTTP {response.status_code}). "
+                        f"Check your API key.\n  API error: {error_detail}"
                     )
                     raise ProviderAuthError(msg)
 
+                if response.status_code == 404:
+                    # Almost always means the model name is wrong
+                    msg = (
+                        f"Gemini model not found: '{self._model}' (HTTP 404).\n"
+                        f"  API error: {error_detail}\n"
+                        f"  Run 'nopush init' and choose a valid model."
+                    )
+                    raise ProviderError(msg)
+
                 if response.status_code == 429:
-                    last_error = ProviderRateLimitError("Gemini rate limit exceeded. Retrying…")
+                    last_error = ProviderRateLimitError(
+                        f"Gemini rate limit exceeded (HTTP 429). "
+                        f"API error: {error_detail}"
+                    )
                     logger.warning("Rate limited (429), backing off %.1fs…", backoff)
                     time.sleep(backoff)
                     backoff *= 2
@@ -109,20 +123,21 @@ class GeminiProvider(LLMProvider):
 
                 if response.status_code >= 500:
                     last_error = ProviderError(
-                        f"Gemini server error ({response.status_code}). Retrying…"
+                        f"Gemini server error (HTTP {response.status_code}). "
+                        f"API error: {error_detail}"
                     )
                     logger.warning(
-                        "Server error %d, backing off %.1fs…",
+                        "Server error %d, backing off %.1fs… (detail: %s)",
                         response.status_code,
                         backoff,
+                        error_detail,
                     )
                     time.sleep(backoff)
                     backoff *= 2
                     continue
 
                 # Other HTTP errors — don't retry
-                error_detail = self._extract_error_message(response)
-                msg = f"Gemini API returned {response.status_code}: {error_detail}"
+                msg = f"Gemini API returned HTTP {response.status_code}: {error_detail}"
                 raise ProviderError(msg)
 
             except httpx.TimeoutException as exc:
